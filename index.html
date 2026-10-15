@@ -88,15 +88,7 @@
 
   <details class="card">
     <summary>Méthode de calcul et réserves</summary>
-    <p>Redevance annuelle = redevance fixe de 1 000 € + (surface − 49,99 m²) × prix unitaire de la tranche, pour toute surface à partir de 50 m². En dessous de 50 m², seule la redevance fixe est due. Les barques et futreaux sur emplacements dédiés relèvent d'un forfait de 50 €.</p>
-    <p>La grille ne précise pas si le prix unitaire de la tranche « &gt; 100 m² » s'applique à toute la surface excédentaire ou seulement à la part au-delà de 100 m². Ce calculateur applique par défaut le prix de la tranche à toute la surface excédentaire. L'option ci-dessous permet de comparer avec un calcul progressif.</p>
-    <div class="field" style="margin-top:10px">
-      <label for="mode">Mode de calcul des tranches</label>
-      <select id="mode">
-        <option value="plein">Prix de la tranche appliqué à toute la surface excédentaire (par défaut)</option>
-        <option value="progressif">Progressif : tranche 50–99,99 m² puis tranche &gt; 100 m² pour la part au-delà de 100 m²</option>
-      </select>
-    </div>
+    <p>Redevance annuelle = forfait fixe de 1 000 € + part variable. La part variable n'existe que si la surface dépasse 50 m² : elle vaut (surface − 50 m²) × prix unitaire. Le prix unitaire dépend de l'usage, de l'emplacement et de la tranche : surface entre 50 et 99,99 m² (moins de 50 m² au-dessus du seuil) ou à partir de 100 m². Le prix de la tranche s'applique à toute la surface au-dessus de 50 m². Les barques et futreaux sur emplacements dédiés relèvent d'un forfait de 50 €.</p>
     <p>Outil indicatif : seule la grille tarifaire officielle fait foi. Les tarifs sont modifiables dans l'objet <code>TARIFS</code> en tête du script.</p>
   </details>
 </main>
@@ -104,9 +96,8 @@
 <script>
 /* ===== Données tarifaires 2025 (€ TTC) – à modifier ici si la grille évolue ===== */
 const FIXE = 1000;          // redevance fixe annuelle
-const SEUIL_REF = 49.99;    // surface de référence incluse dans la redevance fixe
-const SEUIL_T1 = 50;        // début de la tranche 50 – 99,99 m²
-const SEUIL_T2 = 100;       // début de la tranche > 100 m²
+const SEUIL_REF = 50;       // surface incluse dans la redevance fixe ; la part variable porte sur ce qui dépasse
+const SEUIL_T2 = 100;       // à partir de 100 m² (soit plus de 50 m² au-dessus du seuil), le prix unitaire change
 
 // p1 = prix €/m² excédentaire tranche 50–99,99 m² ; p2 = tranche ≥ 100 m²
 const TARIFS = {
@@ -182,21 +173,13 @@ function calcul(){
     rows.push(["Redevance fixe annuelle", eur(FIXE)]);
     total = FIXE;
 
-    if(surf >= SEUIL_T1){
-      const progressif = $("mode").value === "progressif";
-      if(progressif && surf >= SEUIL_T2){
-        const q1 = SEUIL_T2 - SEUIL_REF, q2 = surf - SEUIL_T2;
-        rows.push([`Excédent tranche 50–99,99 m² : ${m2(q1)} × ${eur(s.p1)}`, eur(q1 * s.p1)]);
-        rows.push([`Excédent tranche ≥ 100 m² : ${m2(q2)} × ${eur(s.p2)}`, eur(q2 * s.p2)]);
-        total += q1 * s.p1 + q2 * s.p2;
-      } else {
-        const p = surf >= SEUIL_T2 ? s.p2 : s.p1;
-        const q = surf - SEUIL_REF;
-        rows.push([`Surface excédentaire : ${m2(q)} × ${eur(p)}`, eur(q * p)]);
-        total += q * p;
-      }
+    if(surf > SEUIL_REF){
+      const p = surf >= SEUIL_T2 ? s.p2 : s.p1;
+      const q = surf - SEUIL_REF;
+      rows.push([`Surface excédentaire au-dessus de 50 m² : ${m2(q)} × ${eur(p)}/m² (${surf >= SEUIL_T2 ? "tranche ≥ 100 m²" : "tranche 50–99,99 m²"})`, eur(q * p)]);
+      total += q * p;
     } else {
-      rows.push(["Surface inférieure à 50 m² : pas de supplément", eur(0)]);
+      rows.push(["Surface de 50 m² ou moins : part variable nulle", eur(0)]);
     }
 
     if(u.marchand && $("marchand").checked){
@@ -216,7 +199,7 @@ function calcul(){
 
 fillUsage(); fillSecteurs(); calcul();
 $("usage").addEventListener("change", () => { fillSecteurs(); calcul(); });
-["secteur","marchand","lht","largeur","mode"].forEach(id => {
+["secteur","marchand","lht","largeur"].forEach(id => {
   $(id).addEventListener("input", calcul);
   $(id).addEventListener("change", calcul);
 });
