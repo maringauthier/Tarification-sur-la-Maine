@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calculateur de redevance AOT – Plan d'eau de la Maine</title>
+<style>
+  :root{
+    --bg:#f4f6f8; --card:#ffffff; --ink:#1b2a38; --muted:#5d6b78; --line:#d9e0e6;
+    --accent:#0b5c8a; --accent-soft:#e3f0f8; --warn:#8a5a00; --warn-bg:#fff4dc;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#10181f; --card:#18232d; --ink:#e8eef3; --muted:#9aabb9; --line:#2b3a47;
+      --accent:#5db4e6; --accent-soft:#17303f; --warn:#f0c060; --warn-bg:#33290f; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  main{max-width:760px;margin:0 auto;padding:24px 16px 48px}
+  h1{font-size:1.5rem;margin:0 0 4px}
+  .sub{color:var(--muted);margin:0 0 20px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:16px}
+  .card h2{font-size:1rem;margin:0 0 14px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+  label{display:block;font-weight:600;margin:0 0 4px}
+  .field{margin-bottom:14px}
+  .field:last-child{margin-bottom:0}
+  select,input[type=number]{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
+  select:focus,input:focus{outline:2px solid var(--accent);outline-offset:1px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:480px){.row{grid-template-columns:1fr}}
+  .check{display:flex;gap:10px;align-items:flex-start;font-weight:500}
+  .check input{margin-top:5px;width:18px;height:18px}
+  .hint{color:var(--muted);font-size:.875rem;margin-top:4px}
+  .hidden{display:none!important}
+  .result{background:var(--accent-soft);border-color:var(--accent)}
+  .total{font-size:2.2rem;font-weight:700;color:var(--accent);line-height:1.1}
+  .total small{font-size:1rem;font-weight:500;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;margin-top:14px;font-size:.95rem}
+  td{padding:6px 0;border-bottom:1px solid var(--line)}
+  td:last-child{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  tr:last-child td{border-bottom:0}
+  .warn{background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:10px 12px;margin-top:12px;font-size:.9rem}
+  .empty{color:var(--muted);margin:0}
+  details{font-size:.9rem;color:var(--muted)}
+  summary{cursor:pointer;font-weight:600}
+  details p{margin:8px 0 0}
+</style>
+</head>
+<body>
+<main>
+  <h1>Calculateur de redevance d'occupation</h1>
+  <p class="sub">Autorisation d'occupation temporaire sur la Maine – Tarification 2025, redevance d'amarrage sur le plan d'eau (grille 1/). Montants en € TTC, par an.</p>
+
+  <section class="card">
+    <h2>1. Type d'usage</h2>
+    <div class="field">
+      <label for="usage">Usage du bateau</label>
+      <select id="usage"></select>
+    </div>
+    <div class="field" id="f-secteur">
+      <label for="secteur" id="l-secteur">Secteur occupé</label>
+      <select id="secteur"></select>
+    </div>
+    <div class="field hidden" id="f-marchand">
+      <label class="check"><input type="checkbox" id="marchand">
+        <span>Usage lié à de l'hébergement marchand (majoration de 25 %)</span></label>
+    </div>
+  </section>
+
+  <section class="card" id="c-dim">
+    <h2>2. Dimensions du bateau</h2>
+    <div class="row">
+      <div class="field">
+        <label for="lht">Longueur hors-tout (m)</label>
+        <input type="number" id="lht" min="0" step="0.01" inputmode="decimal" placeholder="ex. 12,50">
+      </div>
+      <div class="field">
+        <label for="largeur">Largeur hors-tout (m)</label>
+        <input type="number" id="largeur" min="0" step="0.01" inputmode="decimal" placeholder="ex. 4,20">
+      </div>
+    </div>
+    <p class="hint">Dimensions incluant tous les éléments permanents (bout-dehors, hors-bord relevé, bossoirs, plateformes de bain…). La surface retenue est celle du plus petit rectangle dans lequel le bateau s'inscrit à son poste d'amarrage. Les passerelles ne sont pas comptabilisées.</p>
+  </section>
+
+  <section class="card result" aria-live="polite">
+    <h2>Redevance annuelle</h2>
+    <div id="out"><p class="empty">Renseignez les informations ci-dessus.</p></div>
+  </section>
+
+  <details class="card">
+    <summary>Méthode de calcul et réserves</summary>
+    <p>Redevance annuelle = redevance fixe de 1 000 € + (surface − 49,99 m²) × prix unitaire de la tranche, pour toute surface à partir de 50 m². En dessous de 50 m², seule la redevance fixe est due. Les barques et futreaux sur emplacements dédiés relèvent d'un forfait de 50 €.</p>
+    <p>La grille ne précise pas si le prix unitaire de la tranche « &gt; 100 m² » s'applique à toute la surface excédentaire ou seulement à la part au-delà de 100 m². Ce calculateur applique par défaut le prix de la tranche à toute la surface excédentaire. L'option ci-dessous permet de comparer avec un calcul progressif.</p>
+    <div class="field" style="margin-top:10px">
+      <label for="mode">Mode de calcul des tranches</label>
+      <select id="mode">
+        <option value="plein">Prix de la tranche appliqué à toute la surface excédentaire (par défaut)</option>
+        <option value="progressif">Progressif : tranche 50–99,99 m² puis tranche &gt; 100 m² pour la part au-delà de 100 m²</option>
+      </select>
+    </div>
+    <p>Outil indicatif : seule la grille tarifaire officielle fait foi. Les tarifs sont modifiables dans l'objet <code>TARIFS</code> en tête du script.</p>
+  </details>
+</main>
+
+<script>
+/* ===== Données tarifaires 2025 (€ TTC) – à modifier ici si la grille évolue ===== */
+const FIXE = 1000;          // redevance fixe annuelle
+const SEUIL_REF = 49.99;    // surface de référence incluse dans la redevance fixe
+const SEUIL_T1 = 50;        // début de la tranche 50 – 99,99 m²
+const SEUIL_T2 = 100;       // début de la tranche > 100 m²
+
+// p1 = prix €/m² excédentaire tranche 50–99,99 m² ; p2 = tranche ≥ 100 m²
+const TARIFS = {
+  plaisance: {
+    label: "Plaisance privée",
+    secteurLabel: "Ponton",
+    secteurs: {
+      savatteA: { label: "Ponton Savatte A / ponton Haute Reculée (eau et électricité inclus)", p1: 40, p2: 30 },
+      savatteB: { label: "Ponton Savatte B (eau incluse)", p1: 47, p2: 30 },
+      barques:  { label: "Barques et futreaux sur emplacements dédiés dans le port", forfait: 50 }
+    }
+  },
+  habitation: {
+    label: "Bateau à usage d'habitation (habitation principale)",
+    secteurLabel: "Secteur",
+    marchand: true,
+    secteurs: {
+      quais:  { label: "Quai de la Savette et quai des Carmes", p1: 25, p2: 20 },
+      berges: { label: "Berges non aménagées", p1: 40, p2: 15 }
+    }
+  },
+  pro: {
+    label: "Bateau à usage professionnel",
+    secteurLabel: "Type d'unité",
+    secteurs: {
+      navigant: { label: "Unité navigant régulièrement", p1: 50, p2: 20 },
+      fixe:     { label: "Unité à usage fixe", p1: 10, p2: 25 }
+    }
+  }
+};
+const MAJ_MARCHAND = 0.25;
+
+/* ===== Interface ===== */
+const $ = id => document.getElementById(id);
+const eur = n => n.toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
+const m2 = n => n.toLocaleString("fr-FR", { maximumFractionDigits: 2 }) + " m²";
+
+function fillUsage(){
+  $("usage").innerHTML = '<option value="">— Choisir —</option>' +
+    Object.entries(TARIFS).map(([k,v]) => `<option value="${k}">${v.label}</option>`).join("");
+}
+function fillSecteurs(){
+  const u = TARIFS[$("usage").value];
+  const sel = $("secteur");
+  if(!u){ sel.innerHTML = '<option value="">—</option>'; $("f-marchand").classList.add("hidden"); return; }
+  $("l-secteur").textContent = u.secteurLabel;
+  sel.innerHTML = '<option value="">— Choisir —</option>' +
+    Object.entries(u.secteurs).map(([k,v]) => `<option value="${k}">${v.label}</option>`).join("");
+  $("f-marchand").classList.toggle("hidden", !u.marchand);
+  if(!u.marchand) $("marchand").checked = false;
+}
+
+function calcul(){
+  const u = TARIFS[$("usage").value];
+  const s = u && u.secteurs[$("secteur").value];
+  const out = $("out");
+  const showDim = !(s && s.forfait);
+  $("c-dim").classList.toggle("hidden", !showDim);
+
+  if(!u || !s){ out.innerHTML = '<p class="empty">Renseignez les informations ci-dessus.</p>'; return; }
+
+  const rows = [];
+  let total, warn = "";
+
+  if(s.forfait){
+    rows.push(["Forfait annuel – " + s.label, eur(s.forfait)]);
+    total = s.forfait;
+  } else {
+    const L = parseFloat($("lht").value), l = parseFloat($("largeur").value);
+    if(!(L > 0) || !(l > 0)){ out.innerHTML = '<p class="empty">Saisissez la longueur et la largeur hors-tout du bateau.</p>'; return; }
+    const surf = L * l;
+    rows.push(["Surface retenue (" + L.toLocaleString("fr-FR") + " m × " + l.toLocaleString("fr-FR") + " m)", m2(surf)]);
+    rows.push(["Redevance fixe annuelle", eur(FIXE)]);
+    total = FIXE;
+
+    if(surf >= SEUIL_T1){
+      const progressif = $("mode").value === "progressif";
+      if(progressif && surf >= SEUIL_T2){
+        const q1 = SEUIL_T2 - SEUIL_REF, q2 = surf - SEUIL_T2;
+        rows.push([`Excédent tranche 50–99,99 m² : ${m2(q1)} × ${eur(s.p1)}`, eur(q1 * s.p1)]);
+        rows.push([`Excédent tranche ≥ 100 m² : ${m2(q2)} × ${eur(s.p2)}`, eur(q2 * s.p2)]);
+        total += q1 * s.p1 + q2 * s.p2;
+      } else {
+        const p = surf >= SEUIL_T2 ? s.p2 : s.p1;
+        const q = surf - SEUIL_REF;
+        rows.push([`Surface excédentaire : ${m2(q)} × ${eur(p)}`, eur(q * p)]);
+        total += q * p;
+      }
+    } else {
+      rows.push(["Surface inférieure à 50 m² : pas de supplément", eur(0)]);
+    }
+
+    if(u.marchand && $("marchand").checked){
+      const maj = total * MAJ_MARCHAND;
+      rows.push(["Majoration hébergement marchand (+25 %)", eur(maj)]);
+      total += maj;
+    }
+    if($("usage").value === "pro" && $("secteur").value === "fixe")
+      warn = "Dans la grille, le prix unitaire des unités à usage fixe (10 €/m² de 50 à 99,99 m², 25 €/m² au-delà de 100 m²) augmente avec la surface, contrairement aux autres lignes : vérifiez la grille source.";
+  }
+
+  out.innerHTML =
+    `<div class="total">${eur(total)} <small>TTC / an</small></div>` +
+    "<table>" + rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join("") + "</table>" +
+    (warn ? `<div class="warn">${warn}</div>` : "");
+}
+
+fillUsage(); fillSecteurs(); calcul();
+$("usage").addEventListener("change", () => { fillSecteurs(); calcul(); });
+["secteur","marchand","lht","largeur","mode"].forEach(id => {
+  $(id).addEventListener("input", calcul);
+  $(id).addEventListener("change", calcul);
+});
+</script>
+</body>
+</html>
