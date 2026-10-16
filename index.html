@@ -8,10 +8,12 @@
   :root{
     --bg:#f4f6f8; --card:#ffffff; --ink:#1b2a38; --muted:#5d6b78; --line:#d9e0e6;
     --accent:#0b5c8a; --accent-soft:#e3f0f8; --warn:#8a5a00; --warn-bg:#fff4dc;
+    --up:#a3321f; --down:#1c7a43;
   }
   @media (prefers-color-scheme: dark){
     :root{ --bg:#10181f; --card:#18232d; --ink:#e8eef3; --muted:#9aabb9; --line:#2b3a47;
-      --accent:#5db4e6; --accent-soft:#17303f; --warn:#f0c060; --warn-bg:#33290f; }
+      --accent:#5db4e6; --accent-soft:#17303f; --warn:#f0c060; --warn-bg:#33290f;
+      --up:#ff8a75; --down:#5fd18d; }
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
@@ -40,9 +42,11 @@
   tr:last-child td{border-bottom:0}
   .warn{background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:10px 12px;margin-top:12px;font-size:.9rem}
   .empty{color:var(--muted);margin:0}
-  details{font-size:.9rem;color:var(--muted)}
-  summary{cursor:pointer;font-weight:600}
-  details p{margin:8px 0 0}
+  .sum td{font-weight:600;font-size:1rem}
+  .detail{color:var(--muted);font-size:.875rem}
+  .detail td{padding:3px 0;border-bottom:0}
+  .up{color:var(--up)}
+  .down{color:var(--down)}
 </style>
 </head>
 <body>
@@ -82,6 +86,11 @@
     <h2>Redevance annuelle</h2>
     <div id="out"><p class="empty">Renseignez les informations ci-dessus.</p></div>
   </section>
+
+  <section class="card hidden" id="c-comp" aria-live="polite">
+    <h2>Comparatif avec l'ancienne tarification</h2>
+    <div id="cmp"></div>
+  </section>
 </main>
 
 <script>
@@ -107,7 +116,7 @@ const TARIFS = {
     secteurLabel: "Secteur",
     marchand: true,
     secteurs: {
-      quaiSavette: { label: "Quai de la Savette", p1: 25, p2: 20 },
+      caleSavatte: { label: "Cale de la Savatte", p1: 25, p2: 20 },
       berges:      { label: "Berges non aménagées", p1: 40, p2: 15 }
     }
   },
@@ -122,10 +131,23 @@ const TARIFS = {
 };
 const MAJ_MARCHAND = 0.25;
 
+/* ===== Ancienne tarification (€ TTC) – délibération du conseil municipal du 29/03/2021 ===== */
+const ANCIEN = {
+  reculee:   { emplacementMois: 59.44, chargesMois: 6.67 },   // pontons promenade de Reculée
+  pontonA:   { nuitee1a14: 10.91, nuitee15: 21.83, hivernageMois: 46.55, habitableMois: 90.37 },
+  pontonB:   [ { min: 5,  max: 7.99,  mois: 63.13 },          // plaisance permanente, eau incluse
+               { min: 8,  max: 12.99, mois: 74.26 },
+               { min: 13, max: 15.99, mois: 92.84 } ],
+  penicheMl: 49.21,                                           // péniche de vie, résidence principale (par an et par ml)
+  pro:       { riviere: 66.83, sansLien: 103.94 }             // par an et par ml
+};
+
 /* ===== Interface ===== */
 const $ = id => document.getElementById(id);
 const eur = n => n.toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
 const m2 = n => n.toLocaleString("fr-FR", { maximumFractionDigits: 2 }) + " m²";
+const nb = n => n.toLocaleString("fr-FR", { maximumFractionDigits: 2 });
+const r2 = n => Math.round(n * 100) / 100;
 
 function fillUsage(){
   $("usage").innerHTML = '<option value="">— Choisir —</option>' +
@@ -142,24 +164,94 @@ function fillSecteurs(){
   if(!u.marchand) $("marchand").checked = false;
 }
 
+/* Calcule ce que le bateau payait avant. Renvoie { total, lines, notes } ou { na: "raison" } */
+function ancienTarif(usage, secteur, L, marchand){
+  const A = ANCIEN, lines = [], notes = [];
+
+  if(usage === "plaisance"){
+    if(secteur === "hauteReculee"){
+      const e = A.reculee.emplacementMois * 12, c = A.reculee.chargesMois * 12;
+      lines.push([`Emplacement : 12 mois × ${eur(A.reculee.emplacementMois)}`, e]);
+      lines.push([`Forfait charges : 12 mois × ${eur(A.reculee.chargesMois)}`, c]);
+      return { total: e + c, lines, notes };
+    }
+    if(secteur === "savatteB"){
+      // En dessous de 5 m, on applique le tarif de la première tranche (5 à 7,99 m)
+      const t = L < A.pontonB[0].min ? A.pontonB[0] : A.pontonB.find(x => L >= x.min && L < x.max + 0.01);
+      if(!t) return { na: "L'ancienne grille du ponton B ne couvre que les bateaux jusqu'à 15,99 m." };
+      lines.push([`Bateau de ${nb(t.min)} à ${nb(t.max)} m : 12 mois × ${eur(t.mois)}`, t.mois * 12]);
+      return { total: t.mois * 12, lines, notes };
+    }
+    if(secteur === "savatteA"){
+      const hs = A.pontonA.habitableMois * 6, bs = A.pontonA.hivernageMois * 6;
+      lines.push([`Haute saison (1er mai – 31 oct.) : 6 mois × ${eur(A.pontonA.habitableMois)}`, hs]);
+      lines.push([`Basse saison (1er nov. – 30 avr.) : 6 mois × ${eur(A.pontonA.hivernageMois)}`, bs]);
+      return { total: hs + bs, lines, notes };
+    }
+    return { na: "L'ancienne grille ne prévoit pas de tarif pour les barques et futreaux." };
+  }
+
+  if(usage === "habitation"){
+    if(marchand){
+      const t = A.pontonA.habitableMois * 6;
+      lines.push([`Bateau habitable destiné à la location, haute saison (1er mai – 31 oct.) : 6 mois × ${eur(A.pontonA.habitableMois)}`, t]);
+      return { total: t, lines, notes };
+    }
+    lines.push([`Péniche de vie, résidence principale : ${nb(L)} m × ${eur(A.penicheMl)}/ml`, L * A.penicheMl]);
+    return { total: L * A.penicheMl, lines, notes };
+  }
+
+  if(usage === "pro"){
+    const fixe = secteur === "fixe";
+    const p = fixe ? A.pro.sansLien : A.pro.riviere;
+    lines.push([`Activité ${fixe ? "sans lien avec la rivière" : "en lien avec la rivière (bateau de promenade)"} : ${nb(L)} m × ${eur(p)}/ml`, L * p]);
+    return { total: L * p, lines, notes };
+  }
+  return { na: "" };
+}
+
+function renderComparatif(newTotal, old){
+  const card = $("c-comp"), el = $("cmp");
+  card.classList.remove("hidden");
+  if(old.na){ el.innerHTML = `<p class="empty">${old.na}</p>`; return; }
+
+  const o = r2(old.total), n = r2(newTotal), diff = r2(n - o);
+  const pct = o > 0 ? (diff / o) * 100 : null;
+  const cls = diff > 0 ? "up" : diff < 0 ? "down" : "";
+  const sign = diff > 0 ? "+" : diff < 0 ? "−" : "";
+  const abs = eur(Math.abs(diff));
+  const pctTxt = pct === null ? "" : ` (${sign}${Math.abs(pct).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %)`;
+
+  el.innerHTML =
+    "<table>" +
+      `<tr><td>Ancienne redevance annuelle</td><td>${eur(o)}</td></tr>` +
+      `<tr><td>Nouvelle redevance annuelle</td><td>${eur(n)}</td></tr>` +
+      `<tr class="sum"><td>Écart</td><td class="${cls}">${sign}${abs}${pctTxt}</td></tr>` +
+    "</table>" +
+    `<table class="detail">${old.lines.map(l => `<tr><td>${l[0]}</td><td>${eur(r2(l[1]))}</td></tr>`).join("")}</table>`;
+}
+
 function calcul(){
-  const u = TARIFS[$("usage").value];
-  const s = u && u.secteurs[$("secteur").value];
+  const usage = $("usage").value, secteur = $("secteur").value;
+  const u = TARIFS[usage];
+  const s = u && u.secteurs[secteur];
   const out = $("out");
   const showDim = !(s && s.forfait);
   $("c-dim").classList.toggle("hidden", !showDim);
+  $("c-comp").classList.add("hidden");
 
   if(!u || !s){ out.innerHTML = '<p class="empty">Renseignez les informations ci-dessus.</p>'; return; }
 
   const rows = [];
-  let total, warn = "";
+  let total, L = 0;
 
   if(s.forfait){
     rows.push(["Forfait annuel – " + s.label, eur(s.forfait)]);
     total = s.forfait;
   } else {
-    const L = parseFloat($("lht").value), l = parseFloat($("largeur").value);
-    if(!(L > 0) || !(l > 0)){ out.innerHTML = '<p class="empty">Saisissez la longueur et la largeur hors-tout du bateau.</p>'; return; }
+    L = parseFloat($("lht").value);
+    const l = parseFloat($("largeur").value);
+    if(!(L > 0) || !(l > 0)){ out.innerHTML = '<p class="empty">Saisissez la longueur et la largeur du bateau.</p>'; return; }
     const surf = L * l;
     rows.push(["Surface retenue (" + L.toLocaleString("fr-FR") + " m × " + l.toLocaleString("fr-FR") + " m)", m2(surf)]);
     rows.push(["Redevance fixe annuelle", eur(FIXE)]);
@@ -179,14 +271,13 @@ function calcul(){
       rows.push(["Majoration hébergement marchand (+25 %)", eur(maj)]);
       total += maj;
     }
-    if($("usage").value === "pro" && $("secteur").value === "fixe")
-      warn = "Dans la grille, le prix unitaire des unités à usage fixe (10 €/m² de 50 à 99,99 m², 25 €/m² au-delà de 100 m²) augmente avec la surface, contrairement aux autres lignes : vérifiez la grille source.";
   }
 
   out.innerHTML =
     `<div class="total">${eur(total)} <small>TTC / an</small></div>` +
-    "<table>" + rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join("") + "</table>" +
-    (warn ? `<div class="warn">${warn}</div>` : "");
+    "<table>" + rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join("") + "</table>";
+
+  renderComparatif(total, ancienTarif(usage, secteur, L, $("marchand").checked));
 }
 
 fillUsage(); fillSecteurs(); calcul();
